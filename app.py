@@ -73,6 +73,7 @@ def main():
         # Crea un objeto de base de conocimientos a partir del texto del HTML
         knowledgeBase = process_text(text)
 
+
         # Caja de entrada de texto para que el usuario escriba su pregunta
         query = st.text_input('Escribe tu pregunta para los HTML...')
 
