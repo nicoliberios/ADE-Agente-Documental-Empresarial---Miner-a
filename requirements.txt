@@ -6,3 +6,7 @@ langchain
 chromadb
 
 langchain_community
+ConversationBufferMemory
+tiktoken
+pymupdf
+openpyxl
