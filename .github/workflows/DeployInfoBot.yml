@@ -50,4 +50,4 @@ jobs:
             sudo docker pull ${{ secrets.DOCKER_USERNAME }}/awsmineria:latest
 
             # Run the new image in a Docker container
-            sudo docker run -d --name awsmineria -p 80:4022 ${{ secrets.DOCKER_USERNAME }}/awscreaterestaurant:latest
+            sudo docker run -d --name awsmineria -p 80:8501 ${{ secrets.DOCKER_USERNAME }}/awscreaterestaurant:latest
