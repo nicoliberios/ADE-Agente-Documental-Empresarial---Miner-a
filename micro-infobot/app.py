@@ -116,6 +116,7 @@ def main():
             )
             end_time = datetime.now()
             
+            
                 # Obtener los tokens de entrada y salida
             prompt_tokens = response['usage'].get('prompt_tokens', 0)
             completion_tokens = response['usage'].get('completion_tokens', 0)
