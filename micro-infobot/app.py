@@ -129,6 +129,7 @@ def main():
             # Guardar el contexto de la nueva conversación
             st.session_state.memory.save_context({"input": query}, {"output": answer})
             
+            
             st.write(answer)
             st.write("Historial de conversación:", st.session_state.memory.buffer)
             
