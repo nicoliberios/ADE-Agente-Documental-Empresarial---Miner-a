@@ -15,12 +15,15 @@ import openai  # Para utilizar la API de OpenAI
 
 # Cargar las variables de entorno
 load_dotenv()
-
+SALUDOS= "Hola en que puedo asistirte, ¡Saludos! ¿Cómo puedo ayudarte hoy?, ¡Bienvenido/a! ¿Cómo puedo asistirte?, ¡Qué gusto verte por aquí! ¿Cómo puedo ayudarte hoy? "
 NOMBRE_DE_LA_EMPRESA = "Corporación Write"
+NOMBRE_AGENTE = "Kliofer"
 
 prompt_inicial = f"""
-Eres InfoBot, parte del equipo de {NOMBRE_DE_LA_EMPRESA}, un asistente inteligente diseñado para responder exclusivamente preguntas basadas en tu base de conocimiento. Tu conocimiento está limitado a la información contenida en estos documentos, y tu objetivo principal es ayudar a resolver consultas relacionadas con ellos de manera eficiente y amigable. 
+Eres {NOMBRE_AGENTE}, parte del equipo de {NOMBRE_DE_LA_EMPRESA}, un asistente inteligente diseñado para responder exclusivamente preguntas basadas en tu base de conocimiento. Tu conocimiento está limitado a la información contenida en estos documentos, y tu objetivo principal es ayudar a resolver consultas relacionadas con ellos de manera eficiente y amigable. 
 Estas interactuando con personas que trabajan en esta empresa.
+
+1. Inicia la conversacion presentandote.
 Tu propósito es servir a todas las consultas que se hagan sobre lo que está en la base de conocimiento de {NOMBRE_DE_LA_EMPRESA} que básicamente es la información de tu base de conocimiento, proporcionándoles respuestas precisas y útiles. No puedes ofrecer información sobre temas fuera de tu base de conocimiento.
 Si se te realiza una pregunta fuera del contexto de los archivos, por favor responde con amabilidad, explicando que no tienes información sobre ese tema.
 En caso de que no encuentres suficiente información en tu base de conocimiento para responder a una consulta, explica de manera clara y amable las razones de tu limitación.
@@ -34,7 +37,11 @@ Basándote en el historial de la conversación. Responde preguntas que esten en 
 if 'memory' not in st.session_state:
     st.session_state.memory = ConversationBufferMemory(memory_key="history", return_messages=True)
 
-# Función para procesar el texto extraído de un archivo HTML/XML
+# Verificar si ya se ha agregado el prompt inicial
+if 'prompt_inicial_added' not in st.session_state:
+    st.session_state.prompt_inicial_added = False
+
+# Función para procesar el texto extraído
 def process_text(text):
     text_splitter = CharacterTextSplitter(
         separator="\n", chunk_size=1000, chunk_overlap=300, length_function=len
@@ -107,6 +114,12 @@ def main():
                 api_key=os.environ.get("OPENAI_API_KEY"),
             )
             end_time = datetime.now()
+            
+                # Obtener los tokens de entrada y salida
+            prompt_tokens = response['usage'].get('prompt_tokens', 0)
+            completion_tokens = response['usage'].get('completion_tokens', 0)
+            total_tokens = response['usage'].get('total_tokens', 0)
+                    
             answer = response['choices'][0]['message']['content'] if response.get('choices') else "Lo siento, no pude obtener una respuesta."
             
             # Guardar el contexto de la nueva conversación
@@ -115,10 +128,13 @@ def main():
             st.write(answer)
             st.write("Historial de conversación:", st.session_state.memory.buffer)
             
-            total_tokens = obtienec.total_tokens
-            costo_total = total_tokens * (0.002 / 1000)
+            # Mostrar los tokens
+            st.write(f"Tokens de entrada (prompt): {prompt_tokens}")
+            st.write(f"Tokens de salida (completación): {completion_tokens}")
             st.write(f"Total de tokens usados: {total_tokens}")
-            st.write(f"Costo estimado: ${costo_total:.6f}")
+                    
+            costo_total = ((prompt_tokens*0.00001)+(completion_tokens*0.00003))
+            st.write(f"Costo Total: ${costo_total:.4f}")
             st.write(f"Tiempo de proceso: {end_time - start_time}")
             st.write(f"Fecha: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     else:

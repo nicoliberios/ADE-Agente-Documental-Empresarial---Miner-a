@@ -1,8 +1,7 @@
-
-FROM python:3.9-slim
+FROM python:3.11-slim
 WORKDIR /app
-COPY . .
+COPY . /app
 RUN pip install --no-cache-dir -r requirements.txt
-ENV OPENAI_API_KEY=$OPENAI_API_KEY
 EXPOSE 8501
+ENV STREAMLIT_SERVER_HEADLESS=true
 CMD ["streamlit", "run", "app.py"]
