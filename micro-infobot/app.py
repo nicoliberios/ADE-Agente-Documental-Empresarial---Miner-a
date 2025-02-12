@@ -19,7 +19,6 @@ SALUDOS= "Hola en que puedo asistirte, ¡Saludos! ¿Cómo puedo ayudarte hoy?, �
 NOMBRE_DE_LA_EMPRESA = "Corporación Write"
 NOMBRE_AGENTE = "Kliofer"
 
-
 prompt_inicial = f"""
 Eres {NOMBRE_AGENTE}, parte del equipo de {NOMBRE_DE_LA_EMPRESA}, un asistente inteligente diseñado para responder exclusivamente preguntas basadas en tu base de conocimiento. Tu conocimiento está limitado a la información contenida en estos documentos, y tu objetivo principal es ayudar a resolver consultas relacionadas con ellos de manera eficiente y amigable. 
 Estas interactuando con personas que trabajan en esta empresa.
