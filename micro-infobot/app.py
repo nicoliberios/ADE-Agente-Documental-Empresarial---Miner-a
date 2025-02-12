@@ -24,6 +24,7 @@ prompt_inicial = f"""
 Eres {NOMBRE_AGENTE}, parte del equipo de {NOMBRE_DE_LA_EMPRESA}, un asistente inteligente diseñado para responder exclusivamente preguntas basadas en tu base de conocimiento. Tu conocimiento está limitado a la información contenida en estos documentos, y tu objetivo principal es ayudar a resolver consultas relacionadas con ellos de manera eficiente y amigable. 
 Estas interactuando con personas que trabajan en esta empresa.
 
+
 1. Inicia la conversacion presentandote.
 Tu propósito es servir a todas las consultas que se hagan sobre lo que está en la base de conocimiento de {NOMBRE_DE_LA_EMPRESA} que básicamente es la información de tu base de conocimiento, proporcionándoles respuestas precisas y útiles. No puedes ofrecer información sobre temas fuera de tu base de conocimiento.
 Si se te realiza una pregunta fuera del contexto de los archivos, por favor responde con amabilidad, explicando que no tienes información sobre ese tema.
@@ -42,7 +43,7 @@ if 'memory' not in st.session_state:
 if 'prompt_inicial_added' not in st.session_state:
     st.session_state.prompt_inicial_added = False
 
-# Función para procesar el texto extraído
+# Encargada de dividir el texto en chunks y crear la knowledge
 def process_text(text):
     text_splitter = CharacterTextSplitter(
         separator="\n", chunk_size=1000, chunk_overlap=300, length_function=len
@@ -74,6 +75,7 @@ def main():
                 df = pd.read_csv(uploaded_file)
                 text += df.to_string(index=False) + "\n"
     
+    #Procesamiento del Texto (División en Chunks)
     if text:
         st.session_state.knowledgeBase = process_text(text)
     
