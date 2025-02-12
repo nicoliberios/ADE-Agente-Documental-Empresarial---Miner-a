@@ -13,6 +13,7 @@ import fitz  # PyMuPDF para procesar PDFs
 import pandas as pd  # Para procesar archivos Excel
 import openai  # Para utilizar la API de OpenAI
 
+
 # Cargar las variables de entorno
 load_dotenv()
 SALUDOS= "Hola en que puedo asistirte, ¡Saludos! ¿Cómo puedo ayudarte hoy?, ¡Bienvenido/a! ¿Cómo puedo asistirte?, ¡Qué gusto verte por aquí! ¿Cómo puedo ayudarte hoy? "

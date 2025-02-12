@@ -1,4 +1,4 @@
-name: Deploy Microservice to ec2-read-restaurant
+name: Deploy Microservice to ec2-infobot
 
 on:
   push:
