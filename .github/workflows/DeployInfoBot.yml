@@ -28,7 +28,7 @@ jobs:
         with:
           context: ./micro-infobot
           push: true
-          tags: ${{ secrets.DOCKER_USERNAME }}/awscreaterestaurant:latest
+          tags: ${{ secrets.DOCKER_USERNAME }}/awsinfobot:latest
 
       # Step 2: Deploy to EC2 using Docker
       - name: Deploy Docker container to EC2
@@ -43,11 +43,15 @@ jobs:
             sudo apt-get install -y docker.io
 
             # Stop and remove any previous container if it exists
-            sudo docker stop awsmineria || true
-            sudo docker rm awsmineria || true
+            sudo docker stop awsinfobot || true
+            sudo docker rm awsinfobot || true
 
             # Pull the Docker image from Docker Hub
-            sudo docker pull ${{ secrets.DOCKER_USERNAME }}/awsmineria:latest
+            sudo docker pull ${{ secrets.DOCKER_USERNAME }}/awsinfobot:latest
 
-            # Run the new image in a Docker container
-            sudo docker run -d --name awsmineria -p 80:8501 ${{ secrets.DOCKER_USERNAME }}/awscreaterestaurant:latest
+            # Run the new image in a Docker container and pass OPENAI_API_KEY as environment variable
+            sudo docker run -d \
+              --name awsinfobot \
+              -p 80:8501 \
+              -e OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }} \
+              ${{ secrets.DOCKER_USERNAME }}/awsinfobot:latest
