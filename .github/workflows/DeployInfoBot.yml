@@ -52,6 +52,6 @@ jobs:
             # Run the new image in a Docker container and pass OPENAI_API_KEY as environment variable
             sudo docker run -d \
               --name awsinfobot \
-              -p 80:8501 \
+              -p 8080:8501 \
               -e OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }} \
               ${{ secrets.DOCKER_USERNAME }}/awsinfobot:latest
