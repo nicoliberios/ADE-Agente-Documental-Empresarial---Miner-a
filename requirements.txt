@@ -1,8 +1,0 @@
-streamlit
-python-dotenv
-beautifulsoup4
-openai
-langchain
-chromadb
-
-langchain_community
