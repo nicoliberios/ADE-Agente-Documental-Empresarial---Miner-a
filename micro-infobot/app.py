@@ -8,12 +8,15 @@ from langchain_community.callbacks.manager import get_openai_callback
 from langchain.schema import Document  
 from datetime import datetime
 from dotenv import load_dotenv
-import re
+from pymongo import MongoClient
+from datetime import datetime
 import os
+import re
 from bs4 import BeautifulSoup
 import fitz  # PyMuPDF para procesar PDFs
 import pandas as pd  # Para procesar archivos Excel
 import openai  # Para utilizar la API de OpenAI
+
 
 # Cargar variables de entorno
 load_dotenv()
@@ -22,7 +25,7 @@ NOMBRE_DE_LA_EMPRESA = "Corporación Write"
 NOMBRE_AGENTE = "Kliofer"
 
 prompt_inicial = f"""
-Eres {NOMBRE_AGENTE}, parte del equipo de {NOMBRE_DE_LA_EMPRESA}, un asistente inteligente diseñado para responder exclusivamente preguntas basadas en tu base de conocimiento. Tu conocimiento está limitado a la información contenida en estos documentos, y tu objetivo principal es ayudar a resolver consultas relacionadas con ellos de manera eficiente y amigable. 
+Soy {NOMBRE_AGENTE}, parte del equipo de {NOMBRE_DE_LA_EMPRESA}, un asistente inteligente diseñado para responder exclusivamente preguntas basadas en tu base de conocimiento. Tu conocimiento está limitado a la información contenida en estos documentos, y tu objetivo principal es ayudar a resolver consultas relacionadas con ellos de manera eficiente y amigable. 
 Estas interactuando con personas que trabajan en esta empresa.
 
 
@@ -33,6 +36,7 @@ En caso de que no encuentres suficiente información en tu base de conocimiento 
 Recuerda siempre ser cordial, servicial y profesional, priorizando la satisfacción del usuario y ayudando a resolver sus dudas dandole informacion sobre los archivos proporcionados.
 Gracias por tu colaboración.
 Basándote en el historial de la conversación. Responde preguntas que esten en el historial de conversacion.
+Si las respuestas que se solicitan preguntale si buscabas algun tema especifico para que le muestres solo la que corresponde si es el caso de que hay muchas opciones.
 """
 
 # Inicializar memoria en session_state si no existe
@@ -43,78 +47,146 @@ if 'memory' not in st.session_state:
 if 'response' not in st.session_state:
     st.session_state.response = None  # Inicializamos como None
 
-# Encargada de dividir el texto en chunks y crear la knowledge base
-def preprocess_text(text):
+def conexion_a_mongo():
+    """
+    Conecta a MongoDB y devuelve la colección de chats.
+    """
+    MONGO_URI = os.getenv("MONGO_URI", "mongodb://localhost:27017")  # Usar variable de entorno o conexión local
+    client = MongoClient(MONGO_URI)
+    db = client["db-historial-chats"]  # Nombre de la base de datos
+    collection = db["coleccion-histochats"]  # Nombre de la colección donde guardaremos los chats
+    return collection
 
-    # 🔹 Eliminar espacios innecesarios
-    text = re.sub(r'\n{3,}', '\n\n', text).strip()
+def guardar_chat_en_mongo(user, message, response):
+    """
+    Guarda chats en MongoDB pero sin resuperarción.
+    """
+    collection = conexion_a_mongo()
+    chat_data = {
+        "user": user,
+        "message": message,
+        "response": response,
+        "timestamp": datetime.now()
+    }
+    collection.insert_one(chat_data)  # Inserta el documento en la colección
 
-    # 🔹 Mantener juntos los títulos de sección
-    text = re.sub(r'(\n[A-Z\s]+)\n', r'\1. ', text)  # Une los títulos con el siguiente párrafo
+def extraer_titulos(text):
+    """
+    Identifica títulos en el texto basándose en patrones como:
+    - Líneas en mayúsculas
+    - Texto con caracteres especiales (indicando encabezados)
+    """
+    titles = []
+    for line in text.split("\n"):
+        line = line.strip()
+        if re.match(r'^[A-Z\s]+$', line) and len(line) > 5:
+            titles.append(line)
+    return titles
 
-    # 🔹 Dividir el texto en párrafos
+def procesar_texto_con_gerarquía(text):
+    """
+    Procesa el texto y lo divide en chunks jerárquicos,
+    asegurando que los títulos agrupan los contenidos correctos.
+    """
+    titles = extraer_titulos(text)
+    
     paragraphs = text.split("\n\n")
     processed_paragraphs = []
-    current_paragraph = ""
-
+    current_section = "General"  # Título predeterminado si no se encuentra uno
+    
     for paragraph in paragraphs:
         paragraph = paragraph.strip()
-
-        # 🔹 Unir párrafos cortos con el siguiente
-        if len(paragraph) < 400:  
-            current_paragraph += " " + paragraph
+        
+        # Si encontramos un título, lo usamos como la nueva sección activa
+        if paragraph in titles:
+            current_section = paragraph  # Almacena el título como sección
         else:
-            if current_paragraph:
-                processed_paragraphs.append(current_paragraph.strip())
-            current_paragraph = paragraph
+            # Cada chunk se asocia a la sección actual
+            processed_paragraphs.append((current_section, paragraph))
+    
+    return processed_paragraphs
 
-    if current_paragraph:
-        processed_paragraphs.append(current_paragraph.strip())
 
-    # 🔹 Ajustar chunks grandes en frases completas
-    final_paragraphs = []
-    for paragraph in processed_paragraphs:
-        if len(paragraph) > 1500:  
-            sentences = re.split(r'(?<=[.!?])\s+', paragraph)  
-            temp_paragraph = ""
-            for sentence in sentences:
-                if len(temp_paragraph) + len(sentence) < 1000:
-                    temp_paragraph += " " + sentence
-                else:
-                    final_paragraphs.append(temp_paragraph.strip())
-                    temp_paragraph = sentence
-            if temp_paragraph:
-                final_paragraphs.append(temp_paragraph.strip())
-        else:
-            final_paragraphs.append(paragraph)
-
-    return "\n\n".join(final_paragraphs)
-
-# 📌 Función para dividir en chunks mejor estructurados
-def process_text(text):
-    # 🔹 Preprocesamos el texto antes de chunking
-    text = preprocess_text(text)
-
+def process_text_with_hierarchy(text):
+    """
+    Crea una base de conocimiento jerárquica con ChromaDB.
+    """
+    processed_data = procesar_texto_con_gerarquía(text)
+    
     text_splitter = RecursiveCharacterTextSplitter(
-        chunk_size=1000,  # Reducción del tamaño para mejor control
-        chunk_overlap=50,  # Solapamiento reducido
-        separators=["\n\n", "\n", ".", " "]  
+        chunk_size=500,
+        chunk_overlap=50,
+        separators=["\n\n", "\n", ".", " "]
     )
-
-    chunks = text_splitter.split_text(text)
+    
     embeddings = OpenAIEmbeddings(openai_api_key=os.environ.get("OPENAI_API_KEY"))
-
-    # Convertimos cada chunk en un objeto Document con metadatos
-    documents = [Document(page_content=chunk, metadata={"fuente": "documento_subido"}) for chunk in chunks]
-    knowledge_base = Chroma.from_documents(documents, embeddings) if chunks else None
-
+    documents = []
+    
+    for section, content in processed_data:
+        chunks = text_splitter.split_text(content)
+        for chunk in chunks:
+            documents.append(Document(page_content=chunk, metadata={"section": section}))
+    
+    knowledge_base = Chroma.from_documents(documents, embeddings) if documents else None
     return knowledge_base
+
+def search_with_hierarchy(query, knowledge_base):
+    """
+    Realiza búsqueda jerárquica:
+    1. Busca en títulos primero.
+    2. Luego busca en los detalles dentro de las secciones relevantes.
+    """
+    if not knowledge_base:
+        return "No hay información almacenada."
+    
+    # Primera fase: Buscar en títulos
+    title_docs = knowledge_base.similarity_search(query, k=3)
+    
+    relevant_sections = set(doc.metadata["section"] for doc in title_docs)
+    
+    # Segunda fase: Buscar dentro de esas secciones
+    all_results = []
+    for section in relevant_sections:
+        section_results = knowledge_base.similarity_search(query, k=2, filter={"section": section})
+        all_results.extend(section_results)
+    
+    return all_results
+
+def print_hierarchical_chunks(knowledge_base):
+    """
+    Imprime los chunks organizados por su jerarquía de títulos en ChromaDB.
+    """
+    if not knowledge_base:
+        print("⚠️ No hay información en la base de datos.")
+        return
+    
+    # Obtener todos los documentos almacenados
+    docs = knowledge_base._collection.get(include=["documents", "metadatas"])
+
+    # Crear un diccionario para organizar los chunks por secciones
+    sections = {}
+    for doc, meta in zip(docs["documents"], docs["metadatas"]):
+        section = meta.get("section", "Sin sección")
+        if section not in sections:
+            sections[section] = []
+        sections[section].append(doc)
+
+    # Imprimir la jerarquía
+    for section, chunks in sections.items():
+        print(f"\n📂 **Sección: {section}**")
+        for i, chunk in enumerate(chunks):
+            print(f"  📜 Chunk {i+1}: {chunk[:200]}...")  # Solo mostramos 200 caracteres por chunk
+
 
 # Función principal
 def main():
     st.sidebar.markdown("**Autores:**.  \n- *Nicolas Liberio*  \n- *Mateo Rivadeneira*")
     st.sidebar.image('logo.jpg', width=250)
     st.markdown('<h1 style="color:  #FFD700;">InfoBot </h1>', unsafe_allow_html=True)
+    
+    # 🔽 Inicializamos la base de conocimiento en session_state para evitar errores 🔽
+    if "knowledgeBase" not in st.session_state:
+        st.session_state["knowledgeBase"] = None
     
     uploaded_files = st.file_uploader("Sube archivos (PDF, CSV, HTML, XML)", type=["pdf", "csv", "xlsx", "html", "xml"], accept_multiple_files=True)
     text = ""
@@ -131,11 +203,9 @@ def main():
             elif file_type == "text/csv":
                 df = pd.read_csv(uploaded_file)
                 text += df.to_string(index=False) + "\n"
-    
-    # Procesamiento del Texto (División en Chunks)
-    if text:
-        st.session_state.knowledgeBase = process_text(text)
-    
+            
+
+
     # 🔹 Crear Tabs para separar Chat, Historial/Costos y Chunks
     tab1, tab2, tab3 = st.tabs(["💬 Chat", "📜 Historial & Costos", "🔍 Ver Chunks"])
 
@@ -185,8 +255,9 @@ def main():
                 # Guardar el contexto de la nueva conversación
                 st.session_state.memory.save_context({"input": query}, {"output": answer})
                 
+                guardar_chat_en_mongo("nliberio", query, answer)
+                
                 st.write(answer)
-
 
     with tab2:
         st.markdown("## 📜 Historial de Conversación y Costos")
@@ -212,6 +283,12 @@ def main():
             st.write(f"📅 **Fecha:** {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
         else:
             st.warning("❌ No hay datos disponibles. Haz una consulta en el chat primero.")
+        if text:
+                st.session_state.knowledgeBase = process_text_with_hierarchy(text)
+        if "knowledgeBase" in st.session_state and st.session_state.knowledgeBase:
+         st.write("📂 **Verificando e imprimiendo jerarquía de chunks en la base de conocimiento...**")
+        print_hierarchical_chunks(st.session_state.knowledgeBase)  # 🔍 Aquí verificamos la jerarquía
+
 
     with tab3:
         st.markdown("## 🔍 Inspección de Chunks en Chroma")
